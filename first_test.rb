@@ -5,14 +5,13 @@ require 'rspec/expectations'
 include RSpec::Matchers
 
 Capybara.run_server = false
-
 Capybara.current_driver = :selenium
-Capybara.app_host = 'http://www.google.com'
-#visit('/')
-#visit('http://www.facebook.com')
 
 
-session = Capybara::Session.new(:selenium)
-session.visit 'https://www.facebook.com/'
-puts session.title
-expect(session.title.include? "Facebook - Log In or Sin Up").to be true
+driver = Capybara::Session.new(:selenium)
+driver.visit 'https://www.facebook.com/'
+puts driver.title
+expect(driver.title.include? "Facebook - Log In or Sign Up").to be true
+driver.click_button('Log In')
+puts driver.title
+expect(driver).to have_selector('.signup_btn')
