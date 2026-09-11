@@ -1,0 +1,140 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Controls the vendored app the suite runs against.
+#
+#   bin/app start     starts it, if the build exists
+#   bin/app stop      stops it
+#   bin/app restart   stop then start, which is a full data reset
+#   bin/app status    reports the pid and whether the port answers
+#
+# A start wipes and reseeds the database: app/server.ts calls
+# sequelize.sync({ force: true }) and then datacreator() before it listens, so
+# there is nothing left to clean. The suite restarts the app before it runs, so
+# every run starts from the seeded data and no leftover account or order.
+#
+# Runs `node build/app` rather than `npm start`, so the recorded pid is the app
+# itself and stopping it does not strand a child process.
+
+require 'fileutils'
+require 'net/http'
+
+APP_DIR = File.expand_path('../app', __dir__)
+ENTRY = File.join(APP_DIR, 'build', 'app.js')
+PID_FILE = File.expand_path('../tmp/app.pid', __dir__)
+LOG_FILE = File.expand_path('../log/app.log', __dir__)
+PORT = (ENV['PORT'] || '3000').to_i
+READY_TIMEOUT = 90
+STOP_TIMEOUT = 15
+
+def process_alive?(pid)
+  Process.kill(0, pid)
+  true
+rescue Errno::ESRCH
+  false
+rescue Errno::EPERM
+  true
+end
+
+def running_pid
+  return nil unless File.exist?(PID_FILE)
+
+  pid = File.read(PID_FILE).to_i
+  return nil unless pid.positive? && process_alive?(pid)
+
+  pid
+end
+
+def reachable?
+  Net::HTTP.get_response(URI("http://localhost:#{PORT}/")).code == '200'
+rescue StandardError
+  false
+end
+
+def log_tail(lines = 20)
+  return '(no log written)' unless File.exist?(LOG_FILE)
+
+  File.readlines(LOG_FILE).last(lines).join
+end
+
+def wait_until_reachable(pid)
+  deadline = Time.now + READY_TIMEOUT
+  until reachable?
+    abort "the app exited during startup. Last log lines:\n#{log_tail}" unless process_alive?(pid)
+
+    if Time.now > deadline
+      abort "the app did not answer on port #{PORT} within #{READY_TIMEOUT}s. Last log lines:\n#{log_tail}"
+    end
+
+    sleep 0.5
+  end
+  pid
+end
+
+def start
+  pid = running_pid
+  if pid
+    puts "already running (pid #{pid}). Use `bin/app restart` for a clean database."
+    return
+  end
+
+  unless File.exist?(ENTRY)
+    abort "build/app.js is missing, so the app has not been built yet. Run:\n\n  cd app && npm install --legacy-peer-deps\n"
+  end
+
+  FileUtils.mkdir_p(File.dirname(PID_FILE))
+  FileUtils.mkdir_p(File.dirname(LOG_FILE))
+  File.write(LOG_FILE, '')
+
+  pid = Process.spawn({ 'PORT' => PORT.to_s }, 'node', ENTRY,
+                      chdir: APP_DIR, out: LOG_FILE, err: LOG_FILE, pgroup: true)
+  File.write(PID_FILE, pid.to_s)
+
+  begin
+    wait_until_reachable(pid)
+  rescue SystemExit
+    FileUtils.rm_f(PID_FILE)
+    Process.kill('KILL', -pid) if process_alive?(pid)
+    raise
+  end
+
+  puts "app is up on http://localhost:#{PORT} (pid #{pid})"
+end
+
+def stop
+  pid = running_pid
+  unless pid
+    FileUtils.rm_f(PID_FILE)
+    puts 'app is not running'
+    return
+  end
+
+  Process.kill('TERM', -pid)
+  deadline = Time.now + STOP_TIMEOUT
+  sleep 0.2 while process_alive?(pid) && Time.now <= deadline
+  Process.kill('KILL', -pid) if process_alive?(pid)
+
+  FileUtils.rm_f(PID_FILE)
+  puts "app stopped (pid #{pid})"
+rescue Errno::ESRCH
+  FileUtils.rm_f(PID_FILE)
+  puts 'app had already exited'
+end
+
+def status
+  pid = running_pid
+  state = pid ? "running (pid #{pid})" : 'not running'
+  answers = reachable? ? 'yes' : 'no'
+  puts "#{state}; port #{PORT} answers: #{answers}"
+end
+
+case ARGV.first
+when 'start' then start
+when 'stop' then stop
+when 'restart'
+  stop
+  start
+when 'status' then status
+else
+  abort 'usage: bin/app {start|stop|restart|status}'
+end
