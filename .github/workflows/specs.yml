@@ -42,3 +42,11 @@ jobs:
         run: bundle exec rake spec:parallel
         env:
           PROCESSES: 4
+
+      # Failure screenshots, so a CI-only failure can be inspected locally.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: failure-screenshots
+          path: screenshots/
+          if-no-files-found: ignore

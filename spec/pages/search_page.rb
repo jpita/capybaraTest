@@ -9,9 +9,9 @@ class SearchPage < BasePage
     self
   end
 
-  def result_names = all(Locators::PRODUCT_NAME, minimum: 0).map(&:text)
+  def result_names = wait_for_results.map(&:text)
   def no_results? = has_text?('No results found')
-  def result_count = all(Locators::PRODUCT_NAME, minimum: 0).size
+  def result_count = wait_for_results.size
 
   def add_to_basket(product)
     find(Locators::PRODUCT_CARD, text: product, wait: 10).click_button(Locators::ADD_TO_BASKET)
@@ -76,6 +76,16 @@ class SearchPage < BasePage
   end
 
   private
+
+  # The grid renders after the paginator, so a read taken straight after a search can
+  # come back empty on a slower machine. Waiting for cards first costs nothing when
+  # there are any, and a search with no matches then waits for the empty state.
+  def wait_for_results
+    return all(Locators::PRODUCT_NAME, minimum: 0) if has_css?(Locators::PRODUCT_CARD, wait: RENDER_WAIT)
+    return [] if has_text?('No results found', wait: Capybara.default_max_wait_time - RENDER_WAIT)
+
+    all(Locators::PRODUCT_NAME, minimum: 0)
+  end
 
   # The basket item is posted in the background, so a page opened straight after
   # the click can finish loading before the item exists. The toast only renders

@@ -32,5 +32,15 @@ RSpec.configure do |config|
     AppControl.finish
   end
 
+  # A failure that only happens on CI cannot be inspected afterwards, so the page is
+  # captured for the workflow to upload.
+  config.after(:each) do |example|
+    next unless example.exception
+
+    page.save_screenshot("failure-#{example.full_description.gsub(/\W+/, '-')}.png")
+  rescue StandardError
+    nil
+  end
+
   config.include ApiClient
 end

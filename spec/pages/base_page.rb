@@ -128,8 +128,18 @@ class BasePage
   # back to the DOM property and returns the string "false" for an enabled control,
   # which is truthy. The driver's disabled? reads the property itself, so the two
   # reads together cover both mechanisms.
-  def enabled?(label)
-    control = find_button(label, disabled: :all)
-    !control.disabled? && control['aria-disabled'] != 'true'
+  #
+  # The control can exist while still holding the previous state, so this polls for
+  # the window rather than reading once. That costs the window only when the control
+  # stays disabled, which is what the assertions that check for it expect.
+  def enabled?(label, wait: RENDER_WAIT)
+    deadline = Time.now + wait
+    loop do
+      control = find_button(label, disabled: :all)
+      return true unless control.disabled? || control['aria-disabled'] == 'true'
+      return false if Time.now > deadline
+
+      sleep 0.05
+    end
   end
 end
