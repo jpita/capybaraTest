@@ -34,4 +34,25 @@ task :spec do
   sh 'bundle exec rspec'
 end
 
+desc 'Run the suite across several processes against one app instance'
+task 'spec:parallel' do
+  processes = (ENV['PROCESSES'] || 4).to_i
+
+  # Tells spec_helper that this task owns the app, so no process resets it mid-run.
+  ENV['SUITE_MANAGES_APP'] = '1'
+
+  # parallel_tests writes per-file runtimes to the path given by --runtime-log, and
+  # balances by them when asked to group by "runtime". It raises if that file does
+  # not exist yet, and the documented "default" fallback is not accepted by the rspec
+  # runner, so the first run groups by size and later runs balance by time.
+  runtime_log = 'tmp/parallel_runtime_rspec.log'
+  group_by = File.exist?(runtime_log) ? 'runtime' : 'filesize'
+
+  sh "#{APP_CONTROL} restart"
+  passed = system("bundle exec parallel_rspec --group-by #{group_by} --runtime-log #{runtime_log} -n #{processes} spec/features")
+  sh "#{APP_CONTROL} restart"
+
+  abort 'the parallel run failed' unless passed
+end
+
 task default: :spec

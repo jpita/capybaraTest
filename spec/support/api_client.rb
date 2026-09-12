@@ -15,7 +15,25 @@ module ApiClient
   # Registration is two calls in this app: the account, then the security answer that
   # links the account to its question. Without the second call the forgot-password
   # lookup answers {} and the answer field never enables.
-  def register_account
+  #
+  # A parallel run has one app process on one SQLite file, so a concurrent write can
+  # come back as a 500. Each attempt builds a fresh email, so a retry cannot collide
+  # with the account the failed attempt may already have created.
+  def register_account(attempts: 3)
+    try = 0
+    begin
+      try += 1
+      create_account
+    rescue RuntimeError => e
+      retry if try < attempts && e.message.match?(/returned 5\d\d/)
+
+      raise
+    end
+  end
+
+  private
+
+  def create_account
     email = "capybara-#{SecureRandom.hex(6)}@example.test"
     password = 'Passw0rd!23'
     answer = SecureRandom.hex(4)

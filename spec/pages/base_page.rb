@@ -13,6 +13,12 @@ class BasePage
   # Shown by both password forms until the two entries match.
   PASSWORD_MISMATCH_TEXT = 'Passwords do not match'
 
+  # Anything the app renders at bootstrap, or with a route, is on screen well
+  # inside this window: a page load measured 110ms cold and 34ms warm, including
+  # the API call behind the product grid. Probing for an element that is not there
+  # costs the whole wait, so this is deliberately short.
+  RENDER_WAIT = 1.0
+
   # Subclasses declare their route once and inherit `open`.
   def self.path(value) = define_method(:path) { value }
 
@@ -37,11 +43,16 @@ class BasePage
   end
 
   # Juice Shop opens behind a cookie bar and a welcome dialog. Both cover the app,
-  # so every page dismisses them before it does anything else.
-  # The welcome dialog's backdrop sits above the cookie bar, so it must close first
-  # or its overlay intercepts the cookie bar's click.
+  # so a page dismisses them before it does anything else.
+  # Neither is present on most visits, so one combined probe decides whether to look
+  # for them at all, rather than paying two timeouts to find nothing.
   def dismiss_overlays
-    click_button(Locators::WELCOME_CLOSE) if has_button?(Locators::WELCOME_CLOSE, wait: 5)
+    return self unless has_css?(Locators::OVERLAYS, wait: RENDER_WAIT)
+
+    # The consent bar renders before the dialog, and the dialog's backdrop covers the
+    # bar, so the dialog must close first. Both get the full window here; this is only
+    # reached when the probe above found an overlay, so it costs nothing on most pages.
+    click_button(Locators::WELCOME_CLOSE) if has_button?(Locators::WELCOME_CLOSE, wait: RENDER_WAIT)
     dismiss_cookie_bar
     self
   end
@@ -51,18 +62,18 @@ class BasePage
   # no href, so the link locator never matches it and it is matched by class.
   # Dismissing leaves the container in the DOM at zero height, so waiting for the
   # class to disappear would hang; the click itself is the point of no return.
-  def dismiss_cookie_bar
-    find(Locators::COOKIE_DISMISS, wait: 2).click if has_css?(Locators::COOKIE_DISMISS, wait: 2)
+  def dismiss_cookie_bar(wait: RENDER_WAIT)
+    find(Locators::COOKIE_DISMISS, wait: wait).click if has_css?(Locators::COOKIE_DISMISS, wait: wait)
     self
   end
 
-  def forbidden? = has_text?(FORBIDDEN_TEXT, wait: 5)
+  def forbidden? = has_text?(FORBIDDEN_TEXT, wait: RENDER_WAIT)
 
-  def login_required? = has_text?(LOGIN_REQUIRED_TEXT, wait: 5)
+  def login_required? = has_text?(LOGIN_REQUIRED_TEXT, wait: RENDER_WAIT)
 
   # The register and change-password forms both show this error under the repeat
   # field, so it is defined once here.
-  def mismatch_error? = has_text?(PASSWORD_MISMATCH_TEXT, wait: 5)
+  def mismatch_error? = has_text?(PASSWORD_MISMATCH_TEXT, wait: RENDER_WAIT)
 
   # Some flows confirm inline with a .confirmation element instead of a snackbar, and
   # it stays hidden until the component clears the form it belongs to.

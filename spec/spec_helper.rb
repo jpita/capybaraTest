@@ -16,19 +16,20 @@ RSpec.configure do |config|
   Kernel.srand config.seed
 
   # Setup: start from the app's seeded data, with no account, order or challenge
-  # left behind by an earlier run.
+  # left behind by an earlier run. A parallel launcher prepares the app once for
+  # the whole run instead, so processes cannot reset it under each other.
   config.before(:suite) do
-    AppControl.restart
+    AppControl.prepare
     BrowserState.clear
   end
 
   config.before(:each) { BrowserState.clear }
 
   # Teardown: drop the data this run created, and leave the app reseeded for
-  # whoever uses it next.
+  # whoever uses it next. A parallel launcher does this once after every process.
   config.after(:suite) do
     BrowserState.clear
-    AppControl.restart
+    AppControl.finish
   end
 
   config.include ApiClient

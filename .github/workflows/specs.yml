@@ -1,0 +1,44 @@
+name: specs
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  specs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+
+      # The app's own package-lock.json is gitignored upstream, so the key is the
+      # manifests instead.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            app/node_modules
+            app/frontend/node_modules
+          key: app-deps-${{ runner.os }}-${{ hashFiles('app/package.json', 'app/frontend/package.json') }}
+
+      # This runs the app's postinstall, which builds the frontend and the server,
+      # so build/app.js exists by the time the suite asks bin/app to start it.
+      - name: Build the vendored app
+        run: cd app && npm install --legacy-peer-deps
+
+      # The task starts the app once, runs the suite across several processes, and
+      # resets the app once at the end.
+      - name: Run the suite
+        run: bundle exec rake spec:parallel
+        env:
+          PROCESSES: 4

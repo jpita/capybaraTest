@@ -14,6 +14,8 @@ module Locators
   CONFIRMATION = '.confirmation'
   WELCOME_CLOSE = 'Close Welcome Banner'
   COOKIE_DISMISS = '.cc-btn.cc-dismiss'
+  # Either overlay in one query, so a page pays for one probe instead of two.
+  OVERLAYS = "button[aria-label='#{WELCOME_CLOSE}'], #{COOKIE_DISMISS}"
   CHALLENGE_CLOSE = 'closeButton'
   BODY = 'body'
   CART = '[aria-label="Show the shopping cart"]'
