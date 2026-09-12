@@ -96,6 +96,20 @@ class BasePage
 
   def basket_count = find(Locators::CART, wait: 10).text[/\d+/].to_i
 
+  # Material will not open a mat-select whose option list is still empty
+  # (`_canOpen()` in select.mjs), and a form that fills that list from an API can be
+  # clicked before the response lands. The click is then swallowed with no visible
+  # sign, so this clicks again until the panel actually renders options.
+  def open_select(selector)
+    deadline = Time.now + Capybara.default_max_wait_time
+    loop do
+      find(selector).click
+      return self if has_css?(Locators::OPTION, wait: RENDER_WAIT)
+
+      raise "#{selector} never opened its option list" if Time.now > deadline
+    end
+  end
+
   def open_account_menu
     click_button(Locators::ACCOUNT_MENU)
     self

@@ -43,10 +43,13 @@ jobs:
         env:
           PROCESSES: 4
 
-      # Failure screenshots, so a CI-only failure can be inspected locally.
+      # Failure screenshots and the app's own request log, so a CI-only failure can
+      # be read rather than guessed at.
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: failure-screenshots
-          path: screenshots/
+          name: failure-artifacts
+          path: |
+            screenshots/
+            log/
           if-no-files-found: ignore

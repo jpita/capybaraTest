@@ -17,15 +17,16 @@ class RegisterPage < BasePage
     self
   end
 
-  # The question list is a mat-select, so the options only exist once it is open.
+  # The question list arrives from the API after the form renders, so the select can
+  # be clicked while it is still empty.
   def choose_security_question(question)
-    find(Locators::SECURITY_QUESTION_SELECT).click
+    open_select(Locators::SECURITY_QUESTION_SELECT)
     find(Locators::OPTION, text: question, match: :prefer_exact).click
     self
   end
 
   def first_security_question
-    find(Locators::SECURITY_QUESTION_SELECT).click
+    open_select(Locators::SECURITY_QUESTION_SELECT)
     text = all(Locators::OPTION, minimum: 1).first.text
     find(Locators::OPTION, text: text, match: :prefer_exact).click
     text
